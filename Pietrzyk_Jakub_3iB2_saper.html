@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Saper</title>
+    <style>
+      @font-face {
+        font-family: "Henny Penny";
+        font-style: normal;
+        font-weight: 400;
+        src: local("Henny Penny"), local("HennyPenny-Regular"),
+          url(https://fonts.gstatic.com/s/hennypenny/v7/wXKvE3UZookzsxz_kjGSfPQtvXIZt9DS.woff2)
+            format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+          U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193,
+          U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      * {
+        font-family: "Henny Penny";
+      }
+
+      .start-input {
+        display: inline-block;
+        margin-left: 15px;
+      }
+
+      .start-obj{
+        margin: 50px auto;
+        text-align: center;
+      }
+
+      #generate {
+        width: 100px;
+        text-align: center;
+        margin: 0 auto;
+        border: 1px solid black;
+        border-radius: 20px;
+        padding: 5px;
+        cursor: pointer;
+      }
+
+      #game-div {
+        height: 100vw;
+        width: 80vw;
+        margin: 0 auto;
+        border: 4px solid black;
+      }
+
+      #timer {
+        position: relative;
+        font-size: 40px;
+        font-weight: bold;
+        text-align: center;
+        width: 100%;
+        height: 50px;
+        padding-top: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid black;
+        margin-bottom: 50px;
+      }
+
+      .game-row {
+        width: 100%;
+        padding: 0;
+        display: flex;
+        align-self: center;
+        justify-content: center;
+        height: 20px;
+      }
+
+      .game-square {
+        width: 20px;
+        height: 20px;
+        border: 2px solid black;
+        display: inline-block;
+        margin: 0;
+        padding: 0;
+        background-color: grey;
+        text-align: center;
+      }
+
+      .fa-flag {
+        display: flex;
+        align-self: flex-start;
+        justify-content: center;
+        height: 15px;
+        width: 15px;
+        color: red;
+        padding: 0;
+        margin: 0;
+      }
+
+      #rest-mines {
+        position: absolute;
+        top: 0px;
+        left: 0px;
+      }
+
+      #time {
+        position: absolute;
+        top: 0px;
+        right: 0px;
+      }
+
+      #record {
+        font-size: 17px;
+        border: 1px solid black;
+        border-radius: 20px;
+        padding: 3px;
+        cursor: pointer;
+        position: absolute;
+        right: 10px;
+        bottom: -20px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/js/all.js"
+      integrity="sha256-2JRzNxMJiS0aHOJjG+liqsEOuBb6++9cY4dSOyiijX4="
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      //variables
+      var inputs = ["height", "width", "mines"];
+      var table = [];
+      var total_width;
+      var total_height;
+      var total_mines;
+      var inputsInterval;
+      var total_seconds;
+
+      //zwraca tablicę rekordów
+      function getRecords() {
+        var cookies = decodeURIComponent(document.cookie);
+        var records = {}
+        if (cookies != "") {
+          var arr = cookies.split("; ")
+          for (var i = 0; i < arr.length; i++) {
+            arr[i] = arr[i].split('=')
+            var type = arr[i][0]
+            var nick = arr[i][1]
+            var time = arr[i][2]
+            if(type in records){
+              records[type].push([nick, time])
+            } else {
+              records[type] = [[nick, time]]
+            }
+          }
+        }
+        return records
+      }
+
+      function setRecord(type, nick, time) {
+        var cookies = decodeURIComponent(document.cookie);
+        var cookie = `${type}=${nick}=${time}; `
+        cookies += cookie
+        document.cookie = cookies
+      }
+
+      //pokazywanie rekordu
+      function showRecord() {
+        console.log('pokaz rekord');
+        records = getRecords()
+        debugger
+      }
+
+      function timer(){
+        var timeInterval = setInterval(function() {
+          total_seconds++;
+          var sec_span = document.querySelector("#sec")
+          var sec = parseInt(sec_span.innerHTML);
+          if(sec == 60){
+            var min = parseInt(document.querySelector("#min").innerHTML);
+            document.querySelector("#min").innerHTML = `${min + 1}`
+            sec_span.innerHTML = `0`
+          } else {
+            sec++;
+            if(sec < 10) sec_span.innerHTML = `0${sec}`;
+            if(sec >= 10) sec_span.innerHTML = sec;
+          }
+        }, 1000);
+      }
+
+      function checkMines(){
+        var minesInterval = setInterval(function() {
+          var flagged = document.querySelectorAll(".flagged");
+          document.querySelector("#rest-mines").innerHTML = "Pozostało: " + (total_mines - flagged.length) + " min";
+        }, 100);
+      }
+
+      //get table indexes from id
+      function findCords(e){
+        cords = e.id.split("-");
+        for (var j = 0; j < cords.length; j++) {
+          cords[j] = parseInt(cords[j]);
+        }
+        return cords
+      }
+
+      //create interval that checks if input value is a number [for school]
+      function checkInputsVals(hei,wid,min){
+        inputsInterval = setInterval(function() {
+
+          if (isNaN(hei.value)) {
+            window.setTimeout(function() {
+              hei.value = null;
+            }, 1000);
+          } else if (isNaN(wid.value)) {
+            window.setTimeout(function() {
+              wid.value = null;
+            }, 1000);
+          } else if (isNaN(min.value)) {
+            window.setTimeout(function() {
+              min.value = null;
+            }, 1000);
+          }
+        }, 100);
+      }
+
+      //mark all bombs red
+      function markBombs() {
+        squares = document.querySelectorAll(".game-square");
+        for (var i = 0; i < squares.length; i++) {
+          cords = findCords(squares[i])
+          if (table[cords[0]][cords[1]].mine) {
+            squares[i].style.backgroundColor = "red";
+          }
+        }
+      };
+
+      //check if player won a game
+      function checkIfAll() {
+        var tab = [].concat(...table);
+        var ended = true;
+        for (var i = 0; i < tab.length; i++) {
+          if (tab[i].mine == false && tab[i].checked == false) {
+            ended = false;
+            break;
+          }
+        }
+        return ended;
+      };
+
+      //zwraca tablicę indexów pól dookoła pola wybranego
+      function checkAround(i, j) {
+        var check_indexes = [];
+        switch (i + "-" + j) {
+          case "0-0":
+            check_indexes.push([0, 1], [1, 1], [1, 0]); break;
+          case `${total_height - 1}-0`:
+            check_indexes.push([total_height - 2, 0], [total_height - 1, 1], [total_height - 2, 1]); break;
+          case `0-${total_width - 1}`:
+            check_indexes.push([0, total_width - 2], [1, total_width - 1], [1, total_width - 2]); break;
+          case `${total_height - 1}-${total_width - 1}`:
+            check_indexes.push([total_height - 2, total_width - 1], [total_height - 2, total_width - 2], [total_height - 1, total_width - 2]); break;
+          case `0-${j}`:
+            check_indexes.push([0, j - 1], [0, j + 1], [1, j - 1], [1, j], [1, j + 1]); break;
+          case `${total_height - 1}-${j}`:
+            check_indexes.push([total_height - 1, j - 1], [total_height - 1, j + 1], [total_height - 2, j - 1], [total_height - 2, j], [total_height - 2, j + 1]); break;
+          case `${i}-0`:
+            check_indexes.push([i + 1, 0], [i - 1, 0], [i - 1, 1], [i, 1], [i + 1, 1]); break;
+          case `${i}-${total_width - 1}`:
+            check_indexes.push([i + 1, total_width - 1], [i - 1, total_width - 1], [i - 1, total_width - 2], [i, total_width - 2], [i + 1, total_width - 2]); break;
+          default:
+            check_indexes.push([i - 1, j - 1], [i - 1, j], [i - 1, j + 1], [i, j + 1], [i + 1, j + 1], [i + 1, j], [i + 1, j - 1], [i, j - 1]); break;
+        }
+        return check_indexes;
+      };
+
+      function markField(i, j) {
+        var square = table[i][j];
+        var e = document.querySelectorAll(`.game-square`)[i * total_width + j];
+        if (square.mine == false) {
+          e.style.backgroundColor = "white";
+          if (e.classList.contains("flagged")) {
+            e.classList.remove("flagged");
+          }
+          if (table[i][j].next > 0){
+            e.innerHTML = square.next;
+          }
+          square.checked = true;
+          if (table[i][j].next == 0) {
+            if (j > 0 && table[i][j - 1].checked == false) markField(i, j - 1);
+            if (j < (total_width - 1) && table[i][+j + 1].checked == false) markField(i,+j + 1);
+            if (i < (total_height - 1) && table[+i + 1][j].checked == false) markField(+i + 1, j);
+            if (i > 0 && table[i - 1][j].checked == false) markField(i - 1, j);
+            if (j > 0 && i > 0 && table[i - 1][j - 1].checked == false) markField(i - 1, j - 1);
+            if (j > 0 && i < (total_height - 1) && table[+i + 1][j - 1].checked == false) markField(+i + 1, j - 1);
+            if (j < (total_width - 1) && i < (total_height - 1) && table[+i + 1][+j + 1].checked == false) markField(+i + 1, +j + 1);
+            if (j < (total_width - 1) && i > 0 && table[i - 1][+j + 1].checked == false) markField(i - 1, +j + 1);
+          }
+          if (checkIfAll()) {
+            var time = document.querySelector("#time");
+            alert(`You won in: ${time.innerHTML}`);
+            var type = `${total_width}/${total_height}/${total_mines}`
+            var nick = "KubaPietrzyk"
+            setRecord(type, nick, total_seconds)
+            location.reload();
+          }
+        } else {
+          markBombs();
+          e.innerHTML = "X"; //"<i class='fa fa-remove'></i>";
+          window.setTimeout(function() {
+            alert("You lost");
+            location.reload();
+          }, 1000);
+        }
+      };
+
+      //kliknięcie w pole
+      function clickSquare(e) {
+        cords = findCords(e.target);
+        markField(cords[0],cords[1]);
+      };
+
+      //daj flagę jeśli kliknie prawym
+      function rightClickSquare(e) {
+        cords = findCords(e.target)
+        var square = table[cords[0]][cords[1]];
+        if (square.checked == false) {
+          if (e.target.classList.contains("flagged")) {
+            e.target.classList.remove("flagged");
+            e.target.innerHTML = "";
+          } else {
+            e.target.innerHTML =
+              "<i class='fa fa-flag' aria-hidden='true'></i>";
+            e.target.className += " flagged";
+          }
+        }
+      };
+
+      //tworzenie tabliy w html
+      function gTableHtml() {
+        for (var i = 0; i < table.length; i++) {
+          row = document.createElement("div");
+          row.className = "game-row";
+          for (var j = 0; j < table[i].length; j++) {
+            var square = document.createElement("span");
+            square.className = "game-square";
+            square.id = `${i}-${j}`;
+            square.addEventListener(
+              "contextmenu",
+              function(e) {
+                e.preventDefault();
+                var rightclick;
+                var e = window.event;
+                if (e.which) {
+                  rightclick = e.which == 3;
+                } else if (e.button) {
+                  rightclick = e.button == 2;
+                }
+
+                if (rightclick) {
+                  rightClickSquare(e);
+                }
+              },
+              false
+            );
+            square.addEventListener(
+              "click",
+              function(e) {
+                clickSquare(e);
+              },
+              false
+            );
+            row.appendChild(square);
+          }
+          document.querySelector("#game-div").appendChild(row);
+        }
+      };
+
+      // zliczanie ile jest bomb wokół pola
+      function countNext(i, j) {
+        var count = 0;
+        var check_indexes = checkAround(i, j);
+
+        for (var k = 0; k < check_indexes.length; k++) {
+          var check_fir = check_indexes[k][0];
+          var check_sec = check_indexes[k][1];
+          if (table[check_fir][check_sec].mine == true) {
+            count++;
+          }
+        }
+        return count;
+      };
+
+      function gCountNumbers() {
+        for (var i = 0; i < table.length; i++) {
+          var tab = table[i];
+          for (var j = 0; j < tab.length; j++) {
+            tab[j].next = countNext(i, j);
+          }
+        }
+      };
+
+      //tworzenie tablicy
+      function gTable() {
+        var mines = [];
+        for (var i = 0; i < total_height * total_width; i++) {
+          mines.push(false);
+        }
+        var num_of_mines = [];
+        while (num_of_mines.length < total_mines) {
+          var r = Math.floor(Math.random() * mines.length - 1) + 1;
+          if (num_of_mines.indexOf(r) === -1) num_of_mines.push(r);
+        }
+        for (var i = 0; i < num_of_mines.length; i++) {
+          mines[num_of_mines[i]] = true;
+        }
+
+        var count_mines = 0;
+        for (var i = 0; i < total_height; i++) {
+          var small_table = [];
+          for (var j = 0; j < total_width; j++) {
+            x = {
+              next: 0,
+              mine: mines[count_mines],
+              checked: false
+            };
+            count_mines++;
+            small_table.push(x);
+          }
+          table.push(small_table);
+        }
+
+        gCountNumbers();
+        gTableHtml();
+      };
+
+      //generowanie sapera
+      function saper() {
+        document.body.innerHTML = "";
+        clearInterval(inputsInterval);
+
+        var game_div = document.createElement("div");
+        game_div.id = "game-div";
+        game_div.innerHTML = `<div id='timer'><div id='rest-mines'>Pozostało: ${total_mines}</div><div id='time'><span id='min'>0</span>:<span id='sec'>0</span><span id="record">Rekord</span></div></div>`
+        document.body.appendChild(game_div);
+        document.querySelector("#record").addEventListener("click", function () {
+          showRecord()
+        })
+        total_seconds = 0;
+        timer();
+        checkMines();
+        gTable();
+      };
+
+      //validation of inputs
+      function onGenerate(hei,wid,min) {
+        if (hei.value == "" || wid.value == "" || min.value == "" || hei.value == null || wid.value == null || min.value == null) {
+          alert("Uzupełnij wszystkie pola");
+        } else if(hei.value < 2 || wid.value < 2 || min.value < 1 || min.value >= (hei.value * wid.value) || wid.value > 50)  {
+          alert("Podałeś złe dane (zbyt duże lub zbyt małe)");
+        } else {
+          total_width = wid.value;
+          total_height = hei.value;
+          total_mines = min.value;
+          saper();
+        }
+      };
+
+      //start - inputs
+      for (var i = 0; i < 3; i++) {
+        var small_div = document.createElement("div");
+        small_div.className = "start-obj";
+        small_div.innerHTML = `<label>${inputs[i]}</label><input type='text' class='start-input' id=${inputs[i]}>`
+
+        document.body.appendChild(small_div);
+      }
+
+      var hei = document.querySelector("#height");
+      var wid = document.querySelector("#width");
+      var min = document.querySelector("#mines");
+      checkInputsVals(hei,wid,min);
+
+      var button = document.createElement("div");
+      button.innerHTML = "Generate";
+      button.id = "generate";
+      button.addEventListener("click",function(){
+        onGenerate(hei,wid,min)
+      })
+      document.body.appendChild(button);
+    </script>
+  </body>
+</html>
